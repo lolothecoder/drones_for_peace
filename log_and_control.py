@@ -27,6 +27,7 @@ and prints it to the console. After 10s the application disconnects and exits.
 """
 import logging
 import time
+import math
 from threading import Timer
 
 import cflib.crtp  # noqa
@@ -80,6 +81,7 @@ class LoggingExample:
         self._lg_stab.add_variable('range.back')
         self._lg_stab.add_variable('range.left')
         self._lg_stab.add_variable('range.right')
+        self._lg_stab.add_variable('range.up')
         # The fetch-as argument can be set to FP16 to save space in the log packet
         # self._lg_stab.add_variable('pm.vbat', 'FP16')
 
@@ -101,8 +103,8 @@ class LoggingExample:
             print('Could not add Stabilizer log config, bad configuration.')
 
         # Start a timer to disconnect in 10s
-        t = Timer(50, self._cf.close_link)
-        t.start()
+        #t = Timer(100, self._cf.close_link)
+        #t.start()
 
     def _stab_log_error(self, logconf, msg):
         """Callback from the log API when an error occurs"""
@@ -132,30 +134,22 @@ class LoggingExample:
         print('Disconnected from %s' % link_uri)
         self.is_connected = False
 
-def PD_controller(x_past, x_current, y_past, y_current, xgoal, y_goal, threshold = 0.075):
-    Kp = 0.5
-    Kd = 0
-    reached_x = False
-    reached_y = False
-
-    error_x = xgoal - x_current
-    derivative_x = x_current - x_past
-
-    error_y = y_goal - y_current
-    derivative_y = y_current - y_past
-
-    v_x = Kp * error_x + Kd * derivative_x
-    v_y = Kp * error_y + Kd * derivative_y
-
-    if(abs(error_x) < threshold): reached_x = True
-    if(abs(error_y) < threshold): reached_y = True  
-    return v_x, v_y, error_x, error_y, reached_x, reached_y
-
 def idle (cf, height, length):
     for y in range(length):
         cf.commander.send_hover_setpoint(0, 0, 0, height)
         time.sleep(0.1)
 
+def check_if_arrived(pos_bot, pos_goal, threshold):
+    if(math.dist(pos_bot, pos_goal) < threshold):
+        return True
+    return False
+
+def takeoff(cf):
+    for y in range(10):
+        cf.commander.send_hover_setpoint(0, 0, 0, y/25)
+        time.sleep(0.1)
+    idle(cf, 0.4, 20)
+    
 if __name__ == '__main__':
     # Initialize the low-level drivers
     cflib.crtp.init_drivers()
@@ -167,7 +161,7 @@ if __name__ == '__main__':
     time.sleep(0.1)
     cf.param.set_value('kalman.resetEstimation', '0')
     time.sleep(2)
-    print("hi")
+    print("Selma is a baddie")
     time.sleep(5)
     # The Crazyflie lib doesn't contain anything to keep the application alive,
     # so this is where your application should do something. In our case we
@@ -175,11 +169,10 @@ if __name__ == '__main__':
     state  = 0
     seq_index = 0
     sequence = [
-    (0.25, 0.25),
-    (0.25, 0.0),
-    #(0.25, 0.25),
-    #(0.0, 0.25),
-    #(0.0, 0.0)
+    (0.5, 0, 0.4),
+    (0.5, 0.5, 0.4),
+    (0, 0.5, 0.4),
+    (0.0, 0.0, 0.4),
     ]
     x_past = 0
     y_past = 0
@@ -187,78 +180,31 @@ if __name__ == '__main__':
         x = le.states['stateEstimate.x']
         y = le.states['stateEstimate.y']
         z = le.states['stateEstimate.z']
+        range_up = le.states['range.up']
+        range_front = le.states['range.front']
+        range_right = le.states['range.right']
+        range_left = le.states['range.left']
+        range_back = le.states['range.back']
         time.sleep(0.01)
-        #print(le.states)
-        #print(le._lg_stab.variables[0].value)
+
         if state == 0:
-            for y in range(10):
-                cf.commander.send_hover_setpoint(0, 0, 0, y/25)
-                time.sleep(0.1)
+            takeoff(cf)
             state = 1
+
         if state == 1:
-            idle(cf, 0.4, 20)
-            state = 2
-        if state == 2:
-            cf.commander.send_position_setpoint(0.5, 0, 0.4, 0)
-            if(le.states['stateEstimate.x'] > 0.5):
+            cf.commander.send_position_setpoint(sequence[seq_index][0], sequence[seq_index][1], sequence[seq_index][2], 0)
+            pos_bot = [x, y]
+            pos_goal = [sequence[seq_index][0], sequence[seq_index][1]]
+            if(check_if_arrived(pos_bot, pos_goal, 0.05)):
                 idle(cf, 0.4, 20)
-                state = 3
-        if state == 3:
-            cf.commander.send_position_setpoint(0, 0, 0.4, 0)
-            if(le.states['stateEstimate.x'] < 0):
-                idle(cf, 0.4, 20)
-                state = 4
-        if state == 4:
+                seq_index += 1
+                if (seq_index > len(sequence) - 1):
+                    seq_index = 0
+        print("x = {:.3f}, y = {:.3f}, z = {:.3f} ".format(x, y, z))
+
+        if range_up < 200:
             for y in range(10, -1, -1):
                 cf.commander.send_hover_setpoint(0, 0, 0, y/25)
                 time.sleep(0.1)
             cf.commander.send_stop_setpoint()
             break
-
-          #  for pos in sequence:
-              #  for _ in range(50):
-               #     cf.commander.send_hover_setpoint(pos[0], pos[1], pos[2], pos[3])
-                 #   time.sleep(0.1)
-
-            #state = 2
-        
-        if (state == 99):
-            x_goal = 0.5
-            y_goal = 0
-           # print("x_goal : " + str(x_goal) + "    y : " + str(y_goal))
-            v_x, v_y, error_x, error_y, reached_x, reached_y = PD_controller(x_past, x, y_past, y, x_goal, y_goal)
-            #print("X reached : " + str(reached_x) + " Y reached : " + str(reached_y))
-            #print("Vx : " + str(v_x) + "Vy : " + str(v_y))
-            time.sleep(0.1)
-            if(reached_x):
-                print("Reached!")
-                idle(cf, 0.4, 20)
-                #state = 4
-            #vy, error_y, reached_y = PD_controller(y_past, le.states['stateEstimate.y'], sequence[seq_index][1])
-            #if (reached_x and reached_y):
-                #print("Point " + str(sequence[seq_index]))
-                #seq_index += 1
-                #idle(cf, 0.4, 50)
-                #print("seq index" + str(seq_index))
-                #print("sequence " + str(len(sequence)))
-                #print("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
-                #if seq_index > len(sequence): state = 4
-            cf.commander.send_position_setpoint(v_x, v_y, 0, 0.4)
-           # print("vx : " + str(vx) + "     vy : " + str(vy))
-            #cf.high_level_commander.go_to(1, 0, 0.4, 0, 5)
-            #x_past = le.states['stateEstimate.x']
-           # y_past = le.states['stateEstimate.y']
-        print("x : " + str(le.states['stateEstimate.x']) + "   y : " + str(le.states['stateEstimate.y']))
-        #if (state == 2):
-           # pass
-            #cf.commander.send_position_setpoint(0.5, 0, 0.4, 0)
-            #cf.commander.send_position_setpoint(0, 0, 0.4, 0)
-        #for _ in range(50):
-        #    cf.commander.send_hover_setpoint(0.5, 0, 0, 0.4)
-        #    time.sleep(0.1)
-        
-        #for _ in range(20):
-         #   cf.commander.send_hover_setpoint(0, 0, 0, 0.4)
-         #   time.sleep(0.1)
-
-        #x = cf.param.get_value('kalman.resetEstimation', '0')
