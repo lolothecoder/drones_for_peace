@@ -1,7 +1,10 @@
 # READ ME
 ## What works so far
-You can send the robot a sequence of points for it to follow in the sequence array. The format of the points are (x, y, z). The robot is currently programmed
-to do a 50 cm square at a height of 40 cm. Placing your hand over the robots makes it land.
+- You can send the robot a sequence of points for it to follow in the sequence array. The format of the points are (x, y, z). The robot is currently programmed to do a 50 cm square at a height of 40 cm. 
+
+- Placing your hand over the robots makes it land.
+
+- Dijkstra algorithm works in simulation with visualisation but has not been tested on the robot. Chosen path is in blue. It has not yet been added to the main code.
 
 # Next Steps
 
@@ -16,8 +19,7 @@ Once the robot reaches the endzone, he needs to search for the landing pad. I th
 ## GLOBAL
 
 ### Dijkstra
-Need to be able to generate a map with potential nodes that the robot can go to. This map needs to remove a node once a range sensor has detected that there is an obstacle there. The position of the robot needs
-to also be on the map. The chosen path needs to be a different colour. Once the robot sees an obstacle it recalculates the best path
+The map needs to remove a node once a range sensor has detected that there is an obstacle there. The remove function exists it just need to be activated when the range sensor sees it. The position of the robot needs to also be on the map. Once the robot sees an obstacle it recalculates the best path
 
 ## LOCAL
 ### Obstacle avoidance
