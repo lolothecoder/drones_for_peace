@@ -19,8 +19,8 @@ def timer():
 length = 0.15
 rows = 8
 columns = 7
-start = 2
-goal = 28
+start = 0
+goal = 33
 '''
 
 
@@ -48,18 +48,28 @@ def remove(graph, node):
 
 def create_graph(rows, columns, length):
     nodes_points = []
+    alternate = False
     for i in range(rows):
         for y in range(columns):
-            nodes_points.append((round(length*y, 2), round(length*i, 2)))
+            if (not alternate):
+                nodes_points.append((round(length*y, 2), round(length*i, 2)))
+            else:
+                nodes_points.append((round(length*((columns) - 1 - y), 2), round(length*i, 2)))
+        alternate = not alternate
 
     graph = Graph()
+    count = 1
     for i in range(len(nodes_points)):
         if ((i < len(nodes_points) - 1) and (nodes_points[i][1] == nodes_points[i+1][1])):
             graph.add_edge(i, i+1, length)
             graph.add_edge(i+1, i, length)
         if (nodes_points[i][1] > 0):
-            graph.add_edge(i, i-columns, length)
-            graph.add_edge(i-columns, i, length)
+            graph.add_edge(i, i-count, length)
+            graph.add_edge(i-count, i, length)
+            count += 2
+            if(count > (columns) * 2 - 1):
+                count = 1
+
 
     connections = update_connections(graph)
     return graph, nodes_points, connections 
@@ -108,19 +118,28 @@ def visualisations(node_points, connections, best_path_nodes, best_path_edges):
     plt.plot(x_best[best_path_edges.T], y_best[best_path_edges.T], 'b-') # Edges
     plt.plot(x_best, y_best, 'bo') # Points
     plt.axis('equal')
+    
     #fig = plt.gcf() 
     return fig
 
-def generate_dijkstra(rows, columns, length, start, goal):
+def get_closest_node(node_points, x, y):
+    point = numpy.array((y,x))
+    distances = numpy.linalg.norm(node_points-point, axis=1)
+    node = numpy.argmin(distances)
+    return node
+
+def generate_dijkstra(rows, columns, length, x_start, y_start, init_goal_x, init_goal_y):
     graph, node_points, connections = create_graph(rows, columns, length)
+    start = get_closest_node(node_points, x_start, y_start)
+    goal = get_closest_node(node_points, init_goal_x, init_goal_y)
     best_path_edges, best_path_nodes, node_ids = get_best_path(graph, node_points, start, goal)
     fig = visualisations(node_points, connections, best_path_nodes, best_path_edges)
-    return graph, node_points, connections, best_path_edges, best_path_nodes, fig, node_ids
+    return graph, node_points, connections, best_path_edges, best_path_nodes, fig, node_ids, goal
 
-def conversion(node_points, height):
+def conversion(node_points, height, x_start, y_start):
     sequence = []
     for i in range(len(node_points)):
-        sequence.append((node_points[i][1], -node_points[i][0], height))
+        sequence.append((node_points[i][1] - x_start, node_points[i][0] - y_start, height)) 
     return sequence
 
 def draw_map(fig):
@@ -139,7 +158,7 @@ def draw_map(fig):
 
 '''
 graph, node_points, connections = create_graph(rows, columns, length)
-#print(graph)
+print(graph)
 #print(node_points)
 #print(connections)
 best_path_edges, best_path_nodes, node_ids = get_best_path(graph, node_points, start, goal)

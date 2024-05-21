@@ -137,17 +137,23 @@ class LoggingExample:
         print('Disconnected from %s' % link_uri)
         self.is_connected = False
 
-not_detected = [True, True, True, True]
+#not_detected = [True, True, True, True]
 start_looking_for_obstacles = False
 height_desired = 0.3
-obstacle_detection = 300
-length = 0.07
-rows = 28
+obstacle_detection = 500
+length = 0.1
+rows = 50
 columns = 15
-start = 0
-goal = 415
+x_start = 0
+y_start = 0
+visited_nodes = []
+init_goal_x = 3.75
+init_goal_y = 1
+search_mode_threshold = 3.5
+multiplier = 1
+go_back = False
 #dijk.print_msg()
-graph, node_points, connections, best_path_edges, best_path_nodes, fig, node_ids = dijk.generate_dijkstra(rows, columns, length, start, goal)
+graph, node_points, connections, best_path_edges, best_path_nodes, fig, node_ids, goal = dijk.generate_dijkstra(rows, columns, length, x_start, y_start, init_goal_x, init_goal_y)
 visual = connections
 #fig = dijk.visualisations(node_points, connections, best_path_nodes, best_path_edges)
 
@@ -214,6 +220,19 @@ def sensor_detected_obstacle(range_front, range_left, range_right, range_back):
         sensor[3] = True
     return sensor
 
+def get_search_nodes(nodes_points):
+    search_nodes = []
+    for node in nodes_points:
+        if node[0] >= search_mode_threshold:
+            search_nodes.append(node)
+    return search_nodes
+
+def get_closest_node(node_points, x, y, height):
+    point = numpy.array((x,y, height))
+    distances = numpy.linalg.norm(node_points-point, axis=1)
+    node = numpy.argmin(distances)
+    return node
+
 if __name__ == '__main__':
     # Initialize the low-level drivers
     cflib.crtp.init_drivers()
@@ -224,6 +243,10 @@ if __name__ == '__main__':
     time.sleep(0.1)
     cf.param.set_value('kalman.resetEstimation', '0')
     time.sleep(2)
+    #cf.param.set_value('kalman.initialX', '0')
+    #time.sleep(2)
+    #cf.param.set_value('kalman.initialY', '0.98')
+    #time.sleep(2)
     print("Selma is a baddie")
     #time.sleep(5)
     # The Crazyflie lib doesn't contain anything to keep the application alive,
@@ -240,13 +263,10 @@ if __name__ == '__main__':
     x_past = 0
     y_past = 0
     dijk.draw_map(fig)
-    #time.sleep(2)
-    #connections = dijk.remove(graph, 6)
-    #best_path_edges, best_path_nodes = dijk.get_best_path(graph, node_points, start, goal)
-    #dijk.visualisations(node_points, connections, best_path_nodes, best_path_edges)
-    #time.sleep(2)
-    converted_all_nodes = dijk.conversion(node_points, height_desired)
-    converted_nodes = dijk.conversion(best_path_nodes, height_desired)
+    converted_all_nodes = dijk.conversion(node_points, height_desired, x_start, y_start)
+    converted_nodes = dijk.conversion(best_path_nodes, height_desired, x_start, y_start)
+    search_nodes = get_search_nodes(converted_all_nodes)
+    print("SEARCH NODES " + str(search_nodes))
     print(sequence)
     sequence = converted_nodes
     print(sequence)
@@ -257,9 +277,10 @@ if __name__ == '__main__':
     t2.start()
     print("Going in")
     last_index = 0
+    visited_search_nodes = []
     while le.is_connected:
-        x = le.states['stateEstimate.x']
-        y = le.states['stateEstimate.y']
+        x = le.states['stateEstimate.x'] 
+        y = le.states['stateEstimate.y'] 
         z = le.states['stateEstimate.z']
         range_up = le.states['range.up']
         range_front = le.states['range.front']
@@ -268,25 +289,13 @@ if __name__ == '__main__':
         range_back = le.states['range.back']
         time.sleep(0.01)
 
-        if state == 0:
-            takeoff(cf)
-            state = 1
-        if state == 1:
-            cf.commander.send_position_setpoint(sequence[seq_index][0], sequence[seq_index][1], sequence[seq_index][2], 0)
-            pos_bot = [x, y]
-            pos_goal = [sequence[seq_index][0], sequence[seq_index][1]]
-            if(check_if_arrived(pos_bot, pos_goal, 0.05)):
-                #idle_at_point(cf, height_desired, 5, pos_goal)
-                last_index = node_ids[seq_index]
-                seq_index += 1
-                if (seq_index > len(sequence) - 1):
-                    seq_index =  len(sequence) - 1
-                    state = 2
+        def obstacle_avoidance():
+            global visual, best_path_edges, node_ids, seq_index
             obstacles_detected = sensor_detected_obstacle(range_front, range_left, range_right, range_back)
             #print(obstacles_detected)
             true_indices = [i for i, x in enumerate(obstacles_detected) if x]
-            true_not_detected = [i for i, x in enumerate(not_detected) if x] 
-            if(len(true_indices) > 0 and len(true_not_detected) > 0 and start_looking_for_obstacles):
+            #true_not_detected = [i for i, x in enumerate(not_detected) if x] 
+            if(len(true_indices) > 0 and start_looking_for_obstacles):
                 #print("Detected")
                 for i in range(len(true_indices)):
                     #connections = None
@@ -317,45 +326,128 @@ if __name__ == '__main__':
                         print("Node to remove is ", + min_index) 
 
                         connections = dijk.remove(graph, min_index)
+                        for i in range(2):
+                            if (min_index + i - 1) in graph:
+                                connections = dijk.remove(graph, min_index + i - 1)
+                        for i in range(3):
+                            if (min_index - columns + i - 1) in graph:
+                                connections = dijk.remove(graph, min_index - columns + i - 1)
+                        for i in range(3):
+                            if (min_index + columns + i - 1) in graph:
+                                connections = dijk.remove(graph, min_index + columns + i - 1)
+                        
                         print("removed it")
-                        #print(graph)
-                        #del converted_all_nodes[min_index]
                         if(connections != None):
                             visual = connections
-                            #drone_pos = numpy.array(sequence[seq_index-1])
-                            #print(drone)
-                            #distances_bot = numpy.linalg.norm(converted_all_nodes-drone_pos, axis=1)
-                            #if (seq_index-1 > -1):
-                             #   print(node_ids)
-                             #   start_index_bot = node_ids[seq_index]
-                              #  if start_index_bot == min_index : start_index_bot = node_ids[seq_index-1]
-                            #else:
-                             #   start_index_bot = 0
-                            start_index_bot = last_index
-                            if (start_index_bot == min_index):
-                                start_index_bot = node_ids[seq_index - 2]
+                            if last_index in graph: 
+                                start_index_bot = last_index
+                            else:
+                                for i in range(len(visited_nodes)):
+                                    if (visited_nodes[len(visited_nodes) - 1-i] in graph):
+                                        start_index_bot = visited_nodes[len(visited_nodes) - 1-i]
+                                        break
+                                    else:
+                                        ("Oh no")
+                                        start_index_bot = 0
                             print("start_index: " + str(start_index_bot))
                             print("got fams position")
-                            #plt.close(fig)
-                            #print(node_points)
                             cf.commander.send_hover_setpoint(0, 0, 0, height_desired)
                             print("dijkstra")
                             best_path_edges, best_path_nodes, node_ids = dijk.get_best_path(graph, node_points, start_index_bot, goal)
                             print(best_path_nodes)
                             seq_index = 0
                             print("finna convert")
-                            converted_nodes = dijk.conversion(best_path_nodes, height_desired)
+                            converted_nodes = dijk.conversion(best_path_nodes, height_desired, x_start, y_start)
                             print(converted_nodes)
-                            #valid = connections
-                            #plt.close()
-                            #fig = dijk.visualisations(node_points, visual, best_path_nodes, best_path_edges)
-                            #dijk.draw_map(fig)
                             sequence = converted_nodes
-                #best_path_edges, best_path_nodes = dijk.get_best_path(graph, node_points, start, goal)
-                #plt = dijk.visualisations(node_points, connections, best_path_nodes, best_path_edges)
-        #print("x = {:.3f}, y = {:.3f}, z = {:.3f} ".format(x, y, z))
-        #print("Range Front " + str(range_front))
-        if range_up < 200 or state == 2:
+                            return sequence
+            return None
+
+        if state == 0:
+            print("Take off")
+            takeoff(cf)
+            state = 1
+        if state == 1:
+            #print("Getting to the search area")
+            cf.commander.send_position_setpoint(sequence[seq_index][0], sequence[seq_index][1], sequence[seq_index][2], 0)
+            pos_bot = [x, y]
+            pos_goal = [sequence[seq_index][0], sequence[seq_index][1]]
+            if(check_if_arrived(pos_bot, pos_goal, 0.05)):
+                #idle_at_point(cf, height_desired, 5, pos_goal)
+                visited_nodes.append(node_ids[seq_index])
+                last_index = node_ids[seq_index]
+                seq_index += 1
+                if (x > search_mode_threshold):
+                    seq_index =  0
+                    state = 2
+            new_sequence = obstacle_avoidance()
+            if new_sequence != None:
+                sequence = new_sequence
+        if(state == 2):
+            print("Search Mode")
+            start_search = get_closest_node(converted_all_nodes, x, y, height_desired)
+            #closest_in_search = get_closest_node(search_nodes, x, y, height_desired) + 1
+            print(start_search)
+            for i in range(1, len(search_nodes), 2):
+                i = i * multiplier
+                if start_search+i in graph:
+                    goal_search = start_search+i
+                    break
+            #goal_search = closest_in_search 
+            #print(goal_search)
+            best_path_edges, best_path_nodes, node_ids = dijk.get_best_path(graph, node_points, start_search, goal_search)
+            converted_nodes = dijk.conversion(best_path_nodes, height_desired, x_start, y_start)
+            sequence = converted_nodes
+            seq_index = 0
+            counter = 0
+            state = 4
+        if (state == 4):
+            #print("Searching")
+            cf.commander.send_position_setpoint(sequence[seq_index][0], sequence[seq_index][1], sequence[seq_index][2], 0)
+            pos_bot = [x, y]
+            pos_goal = [sequence[seq_index][0], sequence[seq_index][1]]
+            if(check_if_arrived(pos_bot, pos_goal, 0.05)):
+                print(node_ids)
+                print(seq_index)
+                print(sequence)
+                visited_nodes.append(node_ids[seq_index])
+                last_index = node_ids[seq_index]
+                seq_index += 1
+                converted_nodes = dijk.conversion(best_path_nodes, height_desired, x_start, y_start)
+                if (seq_index > len(sequence) - 1):
+                    seq_index =  0
+                    start_search = get_closest_node(converted_all_nodes, x, y, height_desired)
+                    print(start_search)
+                    #print("search nodes"search_nodes)
+                    #goal_search = get_closest_node(converted_all_nodes, search_nodes[counter][0], search_nodes[counter][1], height_desired)
+                    #print(goal_search)
+                    for i in range(1, len(search_nodes), 3):
+                        i = i * multiplier
+                        if start_search+i in graph:
+                            goal_search = start_search+i
+                            break
+                    print(goal_search)
+                    best_path_edges, best_path_nodes, node_ids = dijk.get_best_path(graph, node_points, start_search, goal_search)
+                    converted_nodes = dijk.conversion(best_path_nodes, height_desired, x_start, y_start)
+                    sequence = converted_nodes
+                    counter += 1
+                    print("sequence : " + str(sequence))
+                    print("Search nodes lenght : " + str(len(search_nodes)))
+                    print("counter " + str(counter))
+                    if (start_search > rows * columns - 2):
+                        multiplier = -1
+                        go_back = True
+                        state = 2
+                    if (x < init_goal_x and go_back):
+                        multiplier = 1
+                        go_back = False
+                        state = 2
+            goal = goal_search
+            new_sequence = obstacle_avoidance()
+            if new_sequence != None:
+                sequence = new_sequence
+            #state = 5
+        if state == 5:
             print("Landing")
             for y in range(5, -1, -1):
                 cf.commander.send_hover_setpoint(0, 0, 0, y/25)
