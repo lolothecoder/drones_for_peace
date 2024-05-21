@@ -137,15 +137,17 @@ class LoggingExample:
         print('Disconnected from %s' % link_uri)
         self.is_connected = False
 
-#not_detected = [True, True, True, True]
+not_detected = [True, True, True, True]
 start_looking_for_obstacles = False
 height_desired = 0.3
 obstacle_detection = 500
+map_x = 5
+map_y = 1.5
 length = 0.1
-rows = 50
-columns = 15
-x_start = 0
+x_start = 0.1
 y_start = 0
+rows = int(map_x / length)
+columns = int(map_y / length)
 visited_nodes = []
 init_goal_x = 3.75
 init_goal_y = 1
@@ -153,8 +155,9 @@ search_mode_threshold = 3.5
 multiplier = 1
 go_back = False
 #dijk.print_msg()
-graph, node_points, connections, best_path_edges, best_path_nodes, fig, node_ids, goal = dijk.generate_dijkstra(rows, columns, length, x_start, y_start, init_goal_x, init_goal_y)
+graph, node_points, connections, best_path_edges, best_path_nodes, fig, node_ids, goal = dijk.generate_dijkstra(rows, columns, length, 0, 0, x_start, y_start, init_goal_x, init_goal_y)
 visual = connections
+print("Best path nodes " + str(best_path_nodes))
 #fig = dijk.visualisations(node_points, connections, best_path_nodes, best_path_edges)
 
 def timer():
@@ -263,8 +266,8 @@ if __name__ == '__main__':
     x_past = 0
     y_past = 0
     dijk.draw_map(fig)
-    converted_all_nodes = dijk.conversion(node_points, height_desired, x_start, y_start)
-    converted_nodes = dijk.conversion(best_path_nodes, height_desired, x_start, y_start)
+    converted_all_nodes = dijk.conversion(node_points, height_desired)
+    converted_nodes = dijk.conversion(best_path_nodes, height_desired)
     search_nodes = get_search_nodes(converted_all_nodes)
     print("SEARCH NODES " + str(search_nodes))
     print(sequence)
@@ -357,7 +360,7 @@ if __name__ == '__main__':
                             print(best_path_nodes)
                             seq_index = 0
                             print("finna convert")
-                            converted_nodes = dijk.conversion(best_path_nodes, height_desired, x_start, y_start)
+                            converted_nodes = dijk.conversion(best_path_nodes, height_desired)
                             print(converted_nodes)
                             sequence = converted_nodes
                             return sequence
@@ -377,7 +380,7 @@ if __name__ == '__main__':
                 visited_nodes.append(node_ids[seq_index])
                 last_index = node_ids[seq_index]
                 seq_index += 1
-                if (x > search_mode_threshold):
+                if (x > search_mode_threshold- x_start):
                     seq_index =  0
                     state = 2
             new_sequence = obstacle_avoidance()
@@ -396,7 +399,7 @@ if __name__ == '__main__':
             #goal_search = closest_in_search 
             #print(goal_search)
             best_path_edges, best_path_nodes, node_ids = dijk.get_best_path(graph, node_points, start_search, goal_search)
-            converted_nodes = dijk.conversion(best_path_nodes, height_desired, x_start, y_start)
+            converted_nodes = dijk.conversion(best_path_nodes, height_desired)
             sequence = converted_nodes
             seq_index = 0
             counter = 0
@@ -413,7 +416,7 @@ if __name__ == '__main__':
                 visited_nodes.append(node_ids[seq_index])
                 last_index = node_ids[seq_index]
                 seq_index += 1
-                converted_nodes = dijk.conversion(best_path_nodes, height_desired, x_start, y_start)
+                converted_nodes = dijk.conversion(best_path_nodes, height_desired)
                 if (seq_index > len(sequence) - 1):
                     seq_index =  0
                     start_search = get_closest_node(converted_all_nodes, x, y, height_desired)
@@ -421,27 +424,32 @@ if __name__ == '__main__':
                     #print("search nodes"search_nodes)
                     #goal_search = get_closest_node(converted_all_nodes, search_nodes[counter][0], search_nodes[counter][1], height_desired)
                     #print(goal_search)
+                    count_search = 0
                     for i in range(1, len(search_nodes), 3):
                         i = i * multiplier
                         if start_search+i in graph:
                             goal_search = start_search+i
+                            if(goal_search == start_search):
+                                count_search += 1
+                            else: count_search = 0
+                            if(count_search > 4): go_back = True
                             break
                     print(goal_search)
-                    best_path_edges, best_path_nodes, node_ids = dijk.get_best_path(graph, node_points, start_search, goal_search)
-                    converted_nodes = dijk.conversion(best_path_nodes, height_desired, x_start, y_start)
+                    best_path_edges, best_path_nodes, node_ids = dijk.get_best_path(graph, node_points, start_search, goal_search, search_nodes[0])
+                    converted_nodes = dijk.conversion(best_path_nodes, height_desired)
                     sequence = converted_nodes
-                    counter += 1
+                    #counter += 1
                     print("sequence : " + str(sequence))
                     print("Search nodes lenght : " + str(len(search_nodes)))
                     print("counter " + str(counter))
                     if (start_search > rows * columns - 2):
-                        multiplier = -1
+                        #multiplier = -1
                         go_back = True
                         state = 2
-                    if (x < init_goal_x and go_back):
-                        multiplier = 1
-                        go_back = False
-                        state = 2
+                    #if (go_back):
+                        #multiplier = 1
+                        #go_back = False
+                        #state = 2
             goal = goal_search
             new_sequence = obstacle_avoidance()
             if new_sequence != None:
