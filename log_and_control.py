@@ -144,21 +144,40 @@ start_looking_for_obstacles = False
 height_desired = 0.4
 obstacle_detection = 400
 map_x = 5
-map_y = 2
-length = 0.1
-x_start = 0.2
-y_start = 1
+map_y = 3
+length = 0.2
+x_start = 1.8
+y_start = 0.3
 rows = int(map_x / length)
 columns = int(map_y / length)
 visited_nodes = []
-init_goal_x = 4
+init_goal_x = 4.25
 init_goal_y = 1
-search_mode_threshold = 3.75
+search_mode_threshold = 4
 multiplier = 1
 go_back = False
 rows_to_remove = 1
 columns_to_remove = 1
 ## 
+## LANDING ##
+position_counter = 500
+z_previous = 0
+x_previous = 0
+y_previous = 0
+x_margin = 0.11
+y_margin = 0.11
+x_margin_overshoot = 0.25
+y_margin_overshoot = 0.25
+z_margin = 0.25
+margin_threshold = 0.10
+x_landing = 0
+y_landing = 0
+initialize_landing = True
+x_border = None
+y_border = None
+positive_direction = 1
+
+
 #dijk.print_msg()
 graph, node_points, connections, best_path_edges, best_path_nodes, fig, node_ids, goal = dijk.generate_dijkstra(rows, columns, length, 0, 0, x_start, y_start, init_goal_x, init_goal_y)
 print("Node ids: " + str(node_ids))
@@ -232,7 +251,7 @@ def sensor_detected_obstacle(range_front, range_left, range_right, range_back):
 def get_search_nodes(nodes_points):
     search_nodes = []
     for node in nodes_points:
-        if node[0] >= search_mode_threshold:
+        if node[0] >= search_mode_threshold-x_start:
             search_nodes.append(node)
     return search_nodes
 
@@ -389,8 +408,20 @@ if __name__ == '__main__':
             print("Take off")
             takeoff(cf)
             state = 1
+        '''
+        if state == 101:
+            cf.commander.send_hover_setpoint(0.2,0,0,height_desired)
+            if(range_front < 0.75):
+                state = 102
+            if x > 3.5:
+                state = 4
+        if state = 102:
+        '''
+
         if state == 1:
             #print("Getting to the search area")
+            if(seq_index > len(sequence) - 1):
+                seq_index = len(sequence) - 1
             cf.commander.send_position_setpoint(sequence[seq_index][0], sequence[seq_index][1], sequence[seq_index][2], 0)
             pos_bot = [x, y]
             pos_goal = [sequence[seq_index][0], sequence[seq_index][1]]
@@ -427,6 +458,7 @@ if __name__ == '__main__':
             state = 4
         if (state == 4):
             #print("Searching")
+            print("z_diff", z-z_previous)
             cf.commander.send_position_setpoint(sequence[seq_index][0], sequence[seq_index][1], sequence[seq_index][2], 0)
             pos_bot = [x, y]
             pos_goal = [sequence[seq_index][0], sequence[seq_index][1]]
@@ -475,20 +507,205 @@ if __name__ == '__main__':
             new_sequence = obstacle_avoidance()
             if new_sequence != None:
                 sequence = new_sequence
-            if (z < height_desired - 0.05):
-                print("In here")
-                #state = 5
+
+            if position_counter == 500:
+                    z_previous = z
+                    x_previous = x
+                    y_previous = y
+                    position_counter = 0
+            else:    
+                position_counter += 1
+
+            if (z-z_previous) > 0.065:
+                    print("detected")
+                    x_landing = x
+                    y_landing = y
+                    position_counter = 500
+                    print("x landing: ", x_landing)
+                    print("y landing: ", y_landing)
+                    print("x prev is ", x_previous, " x is ", x, " y prev is ", y_previous, " y is ", y)
+                    state = 9
+                    '''
+                    if (y - y_previous) > 0.1:
+                        print("going left")
+                        state = 6
+                        positive_direction = 1
+                    elif (y - y_previous) < -0.1:
+                        print("going right")
+                        state = 6
+                        positive_direction = -1
+                    elif (x - x_previous) > 0.1:
+                        print("going forwards")
+                        state = 5
+                        positive_direction = 1
+                    elif (x - x_previous) < -0.1:
+                        print("going backwards")
+                        state = 5
+                        positive_direction = -1
+                    '''
+                    
+
         if state == 5:
-            print("Landing")
-            for y in range(5, -1, -1):
+            print("state 5")
+            print("z is ", z)
+            #cf.commander.send_hover_setpoint(0, 0, 0, 0.3)
+            #for y in range(10):
+                #cf.commander.send_hover_setpoint(-0.1, 0, 0, 0.3)
+            #cf.commander.send_hover_setpoint(0,0,0,0.3)
+            if positive_direction*(x-x_landing)<margin_threshold and abs(y-y_landing)<0.01:
+            #if False:
+                #if range_up < 200:
+                    #for y in range(10, -1, -1):
+                        #cf.commander.send_hover_setpoint(0, 0, 0, y/25)
+                        #time.sleep(0.1)
+                    #cf.commander.send_stop_setpoint()
+                    #break
+                cf.commander.send_position_setpoint((x_landing+positive_direction*x_margin),y_landing,z_margin,0)
+                
+                #cf.commander.send_hover_setpoint(0.05,0,0,0.4)
+                print("going to margin")
+                print("x diff: ", (x-(x_landing)), " x: ", x, " x landing: ", x_landing, "x goal: ", x_landing+positive_direction*x_margin)
+                print("y diff: ", (y-(y_landing)), " y: ", y, " y landing: ", y_landing)
+                #print("x landing + margin: ", x_landing+positive_direction*x_margin)
+            else:
+                state = 7
+                #print("x: ", x)
+                #print("y: ", y)
+                #print("x diff: ", (x-(x_landing)))
+
+        if state == 6:
+            print("state 6")
+            print("z is ", z)
+            if positive_direction*(y-(y_landing))<margin_threshold and abs(x-x_landing)<0.01:
+                #if range_up < 200:
+                    #for y in range(10, -1, -1):
+                        #cf.commander.send_hover_setpoint(0, 0, 0, y/25)
+                        #time.sleep(0.1)
+                    #cf.commander.send_stop_setpoint()
+                    #break
+                cf.commander.send_position_setpoint(x_landing,(y_landing+positive_direction*y_margin),z_margin,0)
+                #cf.commander.send_hover_setpoint(0.05,0,0,0.4)
+                print("going to margin")
+                print("y diff: ", (y-y_landing), " y: ", y, " y landing: ", y_landing, " y goal: ", (y_landing+positive_direction*y_margin))
+                #print("y landing + margin: ", (y_landing+positive_direction*y_margin))
+            else:
+                state = 8
+                #print("x: ", x)
+                #print("y: ", y)
+                #print("y diff: ", (y-y_landing))
+
+        if state == 7:
+            print("state 7")
+            if initialize_landing == True:
+                print("about to idle at height z_margin")
+                idle(cf,z_margin,10)
+                initialize_landing = False
+            else:
+                if position_counter == 500:
+                    z_previous = z
+                    x_previous = x
+                    y_previous = y
+                    position_counter = 0
+                else:    
+                    position_counter += 1
+                if y_border is None and z_previous-z < 0.06:
+                    print("looking for border, z is ", z, "and z prev is ", z_previous)
+                    print("z difference is ", z_previous-z)
+                    cf.commander.send_hover_setpoint(0, 0.1, 0, z_margin)
+                elif y_border is None:
+                    y_border = y
+                    print("border found, z value is ", z)
+                    print("set y border to ", y_border)
+                    cf.commander.send_position_setpoint(x_landing+positive_direction*margin_threshold,(y_border - y_margin_overshoot),z_margin,0)
+                elif positive_direction*(x-x_landing) < margin_threshold+0.02 and abs(y - (y_border - y_margin_overshoot)) < 0.02:
+                    print("going to landing spot, current = (", x, ", ", y, ", ", z, ")")
+                    print("goal = (", x_landing+positive_direction*x_margin, ", ", (y_border - y_margin_overshoot), ", ", z_margin, ")")
+                    cf.commander.send_position_setpoint(x_landing+positive_direction*margin_threshold,(y_border - y_margin_overshoot),z_margin,0)
+                    initialize_landing = True
+                    state = 9
+                else:
+                    print("else")
+                    print("going to landing spot, current = (", x, ", ", y, ", ", z, ")")
+                    print("goal = (", x_landing+positive_direction*x_margin, ", ", (y_border - y_margin_overshoot), ", ", z_margin, ")")
+                    cf.commander.send_position_setpoint(x_landing+positive_direction*margin_threshold,(y_border - y_margin_overshoot),z_margin,0)
+                    
+
+        if state == 8:
+            print("state 8")
+            if initialize_landing == True:
+                print("about to idle at height z_margin")
+                idle(cf,z_margin,10)
+                initialize_landing = False
+            else:
+                if position_counter == 500:
+                    z_previous = z
+                    x_previous = x
+                    y_previous = y
+                    position_counter = 0
+                else:    
+                    position_counter += 1
+                if x_border is None and z_previous-z < 0.055:
+                    print("looking for border, z is ", z, "and z prev is ", z_previous)
+                    print("z difference is ", z_previous-z)
+                    if abs(x-x_landing) < 0.4:
+                        cf.commander.send_hover_setpoint(0.1, 0, 0, z_margin)
+                    else:
+                        state = 4
+                elif x_border is None:
+                    x_border = x
+                    print("border found, z value is ", z)
+                    print("set x border to ", x_border)
+                    cf.commander.send_position_setpoint((x_border-x_margin_overshoot),y_landing+positive_direction*margin_threshold,z_margin,0)
+                elif abs(x-(x_border-x_margin_overshoot)) < 0.02 and positive_direction*(y-y_landing) < margin_threshold+0.02:
+                    print("going to landing spot, current = (", x, ", ", y, ", ", z, ")")
+                    print("goal = (", (x_border-x_margin_overshoot), ", ", y_landing+positive_direction*margin_threshold, ", ", z_margin, ")")
+                    cf.commander.send_position_setpoint((x_border-x_margin_overshoot),y_landing+positive_direction*margin_threshold,z_margin,0)
+                    initialize_landing = True
+                    state = 9
+                else:
+                    print("else")
+                    print("going to landing spot, current = (", x, ", ", y, ", ", z, ")")
+                    print("goal = (", (x_border-x_margin_overshoot), ", ", y_landing+positive_direction*margin_threshold, ", ", z_margin, ")")
+                    cf.commander.send_position_setpoint((x_border-x_margin_overshoot),y_landing+positive_direction*margin_threshold,z_margin,0)
+
+        
+        if state == 9:
+            print("state 9")
+            print("x is ", x, " x_landing ", x_landing)
+            print("y is ", y, " y_landing ", y_landing)
+            print("z is ", z)
+            idle(cf,0.3,15)
+            for y in range(25, -1, -1):
+                print("landing")
+                print("z is ", z)
+                cf.commander.send_hover_setpoint(0, 0, 0, y/100)
+                time.sleep(0.1)
+            cf.commander.send_stop_setpoint()
+            
+            break
+        
+        
+        if range_up < 200:
+            for y in range(10, -1, -1):
                 cf.commander.send_hover_setpoint(0, 0, 0, y/25)
                 time.sleep(0.1)
             cf.commander.send_stop_setpoint()
-            plt.close()
-            #print(visual)
-            #print(best_path_nodes)
-            fig = dijk.visualisations(node_points, visual, best_path_nodes, best_path_edges)
-            dijk.draw_map(fig)
-            #time.sleep(5)
-            print("finito")
             break
+           
+            # if (z < height_desired - 0.05):
+            #     print("In here")
+            #     #state = 5
+        # if state == 5:
+        #     print("Landing")
+        #     for y in range(5, -1, -1):
+        #         cf.commander.send_hover_setpoint(0, 0, 0, y/25)
+        #         time.sleep(0.1)
+        #     cf.commander.send_stop_setpoint()
+        #     plt.close()
+        #     #print(visual)
+        #     #print(best_path_nodes)
+        #     fig = dijk.visualisations(node_points, visual, best_path_nodes, best_path_edges)
+        #     dijk.draw_map(fig)
+        #     #time.sleep(5)
+        #     print("finito")
+        #     break
