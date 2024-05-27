@@ -139,23 +139,29 @@ class LoggingExample:
 
 not_detected = [True, True, True, True]
 start_looking_for_obstacles = False
-height_desired = 0.3
-obstacle_detection = 500
+
+## HYPERPARAM ##
+height_desired = 0.4
+obstacle_detection = 400
 map_x = 5
-map_y = 1.5
+map_y = 2
 length = 0.1
-x_start = 0.1
-y_start = 0
+x_start = 0.2
+y_start = 1
 rows = int(map_x / length)
 columns = int(map_y / length)
 visited_nodes = []
-init_goal_x = 3.75
+init_goal_x = 4
 init_goal_y = 1
-search_mode_threshold = 3.5
+search_mode_threshold = 3.75
 multiplier = 1
 go_back = False
+rows_to_remove = 1
+columns_to_remove = 1
+## 
 #dijk.print_msg()
 graph, node_points, connections, best_path_edges, best_path_nodes, fig, node_ids, goal = dijk.generate_dijkstra(rows, columns, length, 0, 0, x_start, y_start, init_goal_x, init_goal_y)
+print("Node ids: " + str(node_ids))
 visual = connections
 print("Best path nodes " + str(best_path_nodes))
 #fig = dijk.visualisations(node_points, connections, best_path_nodes, best_path_edges)
@@ -326,24 +332,36 @@ if __name__ == '__main__':
 
                         distances = numpy.linalg.norm(converted_all_nodes-obstacle, axis=1)
                         min_index = numpy.argmin(distances)
-                        print("Node to remove is ", + min_index) 
-
-                        connections = dijk.remove(graph, min_index)
-                        for i in range(2):
-                            if (min_index + i - 1) in graph:
-                                connections = dijk.remove(graph, min_index + i - 1)
-                        for i in range(3):
-                            if (min_index - columns + i - 1) in graph:
-                                connections = dijk.remove(graph, min_index - columns + i - 1)
-                        for i in range(3):
-                            if (min_index + columns + i - 1) in graph:
-                                connections = dijk.remove(graph, min_index + columns + i - 1)
+                        print("Node to remove is ", + min_index)
+                        connections = dijk.remove(graph, min_index) 
+                        for i in range(rows_to_remove):
+                            row_chooser_pos = i * columns
+                            row_chooser_neg = -i *columns
+                            for j in range(columns_to_remove):
+                                current_node_pos = min_index + row_chooser_pos + j
+                                current_node_neg = min_index + row_chooser_pos - j
+                                if current_node_pos in graph: 
+                                    connections = dijk.remove(graph, current_node_pos)
+                                    converted_all_nodes[current_node_pos] = (1000, 1000, 1000)
+                                if current_node_neg in graph: 
+                                    connections = dijk.remove(graph, current_node_neg)
+                                    converted_all_nodes[current_node_neg] = (1000, 1000, 1000)
+                            for l in range(columns_to_remove):
+                                current_node_pos = min_index + row_chooser_neg + l
+                                current_node_neg = min_index + row_chooser_neg - l
+                                if current_node_pos in graph: 
+                                    connections = dijk.remove(graph, current_node_pos)
+                                    converted_all_nodes[current_node_pos] = (1000, 1000, 1000)
+                                if current_node_neg in graph: 
+                                    connections = dijk.remove(graph, current_node_neg)
+                                    converted_all_nodes[current_node_neg] = (1000, 1000, 1000)
                         
                         print("removed it")
                         if(connections != None):
                             visual = connections
-                            if last_index in graph: 
-                                start_index_bot = last_index
+                            potential_start = get_closest_node(converted_all_nodes, x, y, height_desired)
+                            if potential_start in graph: 
+                                start_index_bot = potential_start
                             else:
                                 for i in range(len(visited_nodes)):
                                     if (visited_nodes[len(visited_nodes) - 1-i] in graph):
@@ -356,12 +374,13 @@ if __name__ == '__main__':
                             print("got fams position")
                             cf.commander.send_hover_setpoint(0, 0, 0, height_desired)
                             print("dijkstra")
-                            best_path_edges, best_path_nodes, node_ids = dijk.get_best_path(graph, node_points, start_index_bot, goal)
+                            best_path_edges, best_path_nodes, node_ids = dijk.get_best_path(graph, node_points, start_index_bot, goal, 0)
                             print(best_path_nodes)
                             seq_index = 0
                             print("finna convert")
                             converted_nodes = dijk.conversion(best_path_nodes, height_desired)
                             print(converted_nodes)
+                            print("Node ids: " + str(node_ids))
                             sequence = converted_nodes
                             return sequence
             return None
@@ -390,7 +409,7 @@ if __name__ == '__main__':
             print("Search Mode")
             start_search = get_closest_node(converted_all_nodes, x, y, height_desired)
             #closest_in_search = get_closest_node(search_nodes, x, y, height_desired) + 1
-            print(start_search)
+            print("start : " + str(start_search))
             for i in range(1, len(search_nodes), 2):
                 i = i * multiplier
                 if start_search+i in graph:
@@ -398,7 +417,9 @@ if __name__ == '__main__':
                     break
             #goal_search = closest_in_search 
             #print(goal_search)
-            best_path_edges, best_path_nodes, node_ids = dijk.get_best_path(graph, node_points, start_search, goal_search)
+            #if(go_back):
+             #   goal_search = search_nodes
+            best_path_edges, best_path_nodes, node_ids = dijk.get_best_path(graph, node_points, start_search, goal_search, 0)
             converted_nodes = dijk.conversion(best_path_nodes, height_desired)
             sequence = converted_nodes
             seq_index = 0
@@ -434,7 +455,7 @@ if __name__ == '__main__':
                             else: count_search = 0
                             if(count_search > 4): go_back = True
                             break
-                    print(goal_search)
+                    print("Goal search : " + str(goal_search))
                     best_path_edges, best_path_nodes, node_ids = dijk.get_best_path(graph, node_points, start_search, goal_search, search_nodes[0])
                     converted_nodes = dijk.conversion(best_path_nodes, height_desired)
                     sequence = converted_nodes
@@ -442,8 +463,8 @@ if __name__ == '__main__':
                     print("sequence : " + str(sequence))
                     print("Search nodes lenght : " + str(len(search_nodes)))
                     print("counter " + str(counter))
-                    if (start_search > rows * columns - 2):
-                        #multiplier = -1
+                    if (start_search == goal_search):
+                        multiplier = -1
                         go_back = True
                         state = 2
                     #if (go_back):
@@ -454,7 +475,9 @@ if __name__ == '__main__':
             new_sequence = obstacle_avoidance()
             if new_sequence != None:
                 sequence = new_sequence
-            #state = 5
+            if (z < height_desired - 0.05):
+                print("In here")
+                #state = 5
         if state == 5:
             print("Landing")
             for y in range(5, -1, -1):

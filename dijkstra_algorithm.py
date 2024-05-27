@@ -14,8 +14,8 @@ def timer():
 # Start execution in the background.
 #t = threading.Thread(target=timer)
 #t.start()
-'''
 
+'''
 length = 0.2
 rows = 8
 columns = 7
@@ -23,8 +23,8 @@ x_start = 0.2
 y_start = 0.9
 init_goal_y = 0.5
 init_goal_x = 1
-
 '''
+
 
 def print_msg():
     print("Mmmmmm Selma")
@@ -79,7 +79,7 @@ def create_graph(rows, columns, length, x_start, y_start):
     connections = update_connections(graph)
     return graph, nodes_points, connections 
 
-def get_best_path(graph, node_points, start, goal, re_init_goal = 0):
+def get_best_path(graph, node_points, start, goal, re_init_goal):
     best_path_edges = []
     best_path_nodes = []
 
@@ -87,10 +87,15 @@ def get_best_path(graph, node_points, start, goal, re_init_goal = 0):
     while path is None:
         try:
             print("trying")
+            #print(list(graph)[-1])
             path = find_path(graph, start, goal)
         except:
+            print("goal before " + str(goal))
             goal += 1
-            if goal > len(graph): goal = re_init_goal
+            print("goal after")
+            if goal > list(graph)[-1]: 
+                print("Goal too big!")
+                goal = re_init_goal
             print("Changed goal : " + str(goal))
         #print(path)
 
@@ -137,7 +142,7 @@ def generate_dijkstra(rows, columns, length, x, y, x_start, y_start, init_goal_x
     graph, node_points, connections = create_graph(rows, columns, length, x_start, y_start)
     start = get_closest_node(node_points, x, y)
     goal = get_closest_node(node_points, init_goal_x - x_start, init_goal_y - y_start)
-    best_path_edges, best_path_nodes, node_ids = get_best_path(graph, node_points, start, goal)
+    best_path_edges, best_path_nodes, node_ids = get_best_path(graph, node_points, start, goal, 0)
     fig = visualisations(node_points, connections, best_path_nodes, best_path_edges)
     return graph, node_points, connections, best_path_edges, best_path_nodes, fig, node_ids, goal
 
@@ -168,7 +173,7 @@ print(graph)
 #print(connections)
 start = get_closest_node(node_points)
 goal = get_closest_node(node_points, init_goal_x - x_start, init_goal_y - y_start)
-best_path_edges, best_path_nodes, node_ids = get_best_path(graph, node_points, start, goal)
+best_path_edges, best_path_nodes, node_ids = get_best_path(graph, node_points, start, goal, 0)
 fig = visualisations(node_points, connections, best_path_nodes, best_path_edges)
 
 draw_map(fig)
