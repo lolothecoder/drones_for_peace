@@ -176,11 +176,13 @@ initialize_landing = True
 x_border = None
 y_border = None
 positive_direction = 1
+landed = 0
 
 
 #dijk.print_msg()
 graph, node_points, connections, best_path_edges, best_path_nodes, fig, node_ids, goal = dijk.generate_dijkstra(rows, columns, length, 0, 0, x_start, y_start, init_goal_x, init_goal_y)
 print("Node ids: " + str(node_ids))
+init_node = node_ids[0]
 visual = connections
 print("Best path nodes " + str(best_path_nodes))
 #fig = dijk.visualisations(node_points, connections, best_path_nodes, best_path_edges)
@@ -420,8 +422,33 @@ if __name__ == '__main__':
 
         if state == 1:
             #print("Getting to the search area")
+            if (landed == 1):
+                start_index_bot = get_closest_node(converted_all_nodes, x, y, height_desired)
+                goal_back = get_closest_node(converted_all_nodes, x_start, y_start, height_desired)
+                best_path_edges, best_path_nodes, node_ids = dijk.get_best_path(graph, node_points, start_index_bot, init_node, 0)
+                seq_index = 0
+                print("LANDING INFO")
+                print("finna convert")
+                converted_nodes = dijk.conversion(best_path_nodes, height_desired)
+                print(converted_nodes)
+                print("Node ids: " + str(node_ids))
+                sequence = converted_nodes
+                landed = 2
+
             if(seq_index > len(sequence) - 1):
                 seq_index = len(sequence) - 1
+                if(landed == 2):
+                    for y in range(25, -1, -1):
+                        print("landing")
+                        print("z is ", z)
+                        cf.commander.send_hover_setpoint(0, 0, 0, y/100)
+                        time.sleep(0.1)
+                    for y in range(40, -1, -1):
+                        print("landing")
+                        print("z is ", z)
+                        cf.commander.send_hover_setpoint(0, 0, 0, 0)
+                        time.sleep(0.1)
+
             cf.commander.send_position_setpoint(sequence[seq_index][0], sequence[seq_index][1], sequence[seq_index][2], 0)
             pos_bot = [x, y]
             pos_goal = [sequence[seq_index][0], sequence[seq_index][1]]
@@ -430,7 +457,7 @@ if __name__ == '__main__':
                 visited_nodes.append(node_ids[seq_index])
                 last_index = node_ids[seq_index]
                 seq_index += 1
-                if (x > search_mode_threshold- x_start):
+                if (x > search_mode_threshold- x_start and landed != 2):
                     seq_index =  0
                     state = 2
             new_sequence = obstacle_avoidance()
@@ -510,13 +537,11 @@ if __name__ == '__main__':
 
             if position_counter == 500:
                     z_previous = z
-                    x_previous = x
-                    y_previous = y
                     position_counter = 0
             else:    
                 position_counter += 1
 
-            if (z-z_previous) > 0.065:
+            if ((z-z_previous) > 0.065 and landed != 2):
                     print("detected")
                     x_landing = x
                     y_landing = y
@@ -670,19 +695,43 @@ if __name__ == '__main__':
 
         
         if state == 9:
-            print("state 9")
-            print("x is ", x, " x_landing ", x_landing)
-            print("y is ", y, " y_landing ", y_landing)
-            print("z is ", z)
-            idle(cf,0.3,15)
-            for y in range(25, -1, -1):
+            #print("state 9")
+            #print("x is ", x, " x_landing ", x_landing)
+            #print("y is ", y, " y_landing ", y_landing)
+            #print("z is ", z)
+            idle(cf,height_desired,15)
+
+            if(y - y_previous > 0):
+                print("Go right")
+                for i in range(30):
+                     cf.commander.send_hover_setpoint(0, -0.1, 0, height_desired)
+                     time.sleep(0.1)
+            else:
+                print("Go left")
+                for i in range(30):
+                     cf.commander.send_hover_setpoint(0, 0.1, 0, height_desired)
+                     time.sleep(0.1)
+            for y in range(40, -1, -1):
                 print("landing")
                 print("z is ", z)
                 cf.commander.send_hover_setpoint(0, 0, 0, y/100)
                 time.sleep(0.1)
-            cf.commander.send_stop_setpoint()
-            
-            break
+            for y in range(40, -1, -1):
+                print("landing")
+                print("z is ", z)
+                cf.commander.send_hover_setpoint(0, 0, 0, 0)
+                time.sleep(0.1)
+            start_looking_for_obstacles = False
+            t3 = threading.Timer(5, set_start_looking_for_obstacles)
+            t3.start()
+            landed = 1
+            state = 0
+            #cf.commander.send_stop_setpoint()
+        
+
+
+        x_previous = x
+        y_previous = y
         
         
         if range_up < 200:
