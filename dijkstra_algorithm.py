@@ -15,7 +15,7 @@ def timer():
 #t = threading.Thread(target=timer)
 #t.start()
 
-'''
+
 length = 0.2
 rows = 8
 columns = 7
@@ -23,7 +23,7 @@ x_start = 0.2
 y_start = 0.9
 init_goal_y = 0.5
 init_goal_x = 1
-'''
+
 
 
 def print_msg():
@@ -166,7 +166,7 @@ def draw_map(fig):
 
 #plt.close(fig)
 
-'''
+
 graph, node_points, connections = create_graph(rows, columns, length, x_start, y_start)
 print(graph)
 #print(node_points)
@@ -194,4 +194,3 @@ print("good")
 #draw_map(fig)
 #fig.show()
 print("ok")
-'''

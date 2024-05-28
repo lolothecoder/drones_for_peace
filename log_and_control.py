@@ -152,7 +152,7 @@ rows = int(map_x / length)
 columns = int(map_y / length)
 visited_nodes = []
 init_goal_x = 4.25
-init_goal_y = 1
+init_goal_y = 1.5
 search_mode_threshold = 4
 multiplier = 1
 go_back = False
@@ -292,7 +292,7 @@ if __name__ == '__main__':
     ]
     x_past = 0
     y_past = 0
-    dijk.draw_map(fig)
+    #dijk.draw_map(fig)
     converted_all_nodes = dijk.conversion(node_points, height_desired)
     converted_nodes = dijk.conversion(best_path_nodes, height_desired)
     search_nodes = get_search_nodes(converted_all_nodes)
@@ -320,7 +320,7 @@ if __name__ == '__main__':
         time.sleep(0.01)
 
         def obstacle_avoidance():
-            global visual, best_path_edges, node_ids, seq_index
+            global visual, best_path_edges, node_ids, seq_index, goal
             obstacles_detected = sensor_detected_obstacle(range_front, range_left, range_right, range_back)
             #print(obstacles_detected)
             true_indices = [i for i, x in enumerate(obstacles_detected) if x]
@@ -395,6 +395,8 @@ if __name__ == '__main__':
                             print("got fams position")
                             cf.commander.send_hover_setpoint(0, 0, 0, height_desired)
                             print("dijkstra")
+                            if landed == 2:
+                                goal = init_node
                             best_path_edges, best_path_nodes, node_ids = dijk.get_best_path(graph, node_points, start_index_bot, goal, 0)
                             print(best_path_nodes)
                             seq_index = 0
@@ -438,16 +440,21 @@ if __name__ == '__main__':
             if(seq_index > len(sequence) - 1):
                 seq_index = len(sequence) - 1
                 if(landed == 2):
+                    for i in range(15):
+                        cf.commander.send_hover_setpoint(0.15, 0, 0, height_desired)
+                        time.sleep(0.1)
                     for y in range(25, -1, -1):
                         print("landing")
                         print("z is ", z)
                         cf.commander.send_hover_setpoint(0, 0, 0, y/100)
-                        time.sleep(0.1)
-                    for y in range(40, -1, -1):
-                        print("landing")
-                        print("z is ", z)
-                        cf.commander.send_hover_setpoint(0, 0, 0, 0)
-                        time.sleep(0.1)
+                        time.sleep(0.1) 
+                    cf.commander.send_stop_setpoint()
+                    break
+                    #for y in range(40, -1, -1):
+                     #   print("landing")
+                      #  print("z is ", z)
+                       # cf.commander.send_hover_setpoint(0, 0, 0, 0)
+                        #time.sleep(0.1)
 
             cf.commander.send_position_setpoint(sequence[seq_index][0], sequence[seq_index][1], sequence[seq_index][2], 0)
             pos_bot = [x, y]
@@ -711,16 +718,16 @@ if __name__ == '__main__':
                 for i in range(30):
                      cf.commander.send_hover_setpoint(0, 0.1, 0, height_desired)
                      time.sleep(0.1)
-            for y in range(40, -1, -1):
-                print("landing")
-                print("z is ", z)
-                cf.commander.send_hover_setpoint(0, 0, 0, y/100)
-                time.sleep(0.1)
-            for y in range(40, -1, -1):
+            for y in range(10, -1, -1):
                 print("landing")
                 print("z is ", z)
                 cf.commander.send_hover_setpoint(0, 0, 0, 0)
                 time.sleep(0.1)
+            #for y in range(40, -1, -1):
+                #print("landing")
+                #print("z is ", z)
+                #cf.commander.send_hover_setpoint(0, 0, 0, 0)
+                #time.sleep(0.1)
             start_looking_for_obstacles = False
             t3 = threading.Timer(5, set_start_looking_for_obstacles)
             t3.start()
